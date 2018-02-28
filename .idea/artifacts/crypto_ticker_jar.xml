@@ -1,0 +1,10 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="crypto_ticker:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/crypto_ticker_jar</output-path>
+    <root id="archive" name="crypto_ticker.jar">
+      <element id="module-output" name="crypto_ticker" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/sqlite-jdbc-3.21.0.jar" path-in-jar="/" />
+      <element id="library" level="project" name="sqlite-jdbc-3.21.0" />
+    </root>
+  </artifact>
+</component>
