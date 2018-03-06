@@ -1,24 +1,25 @@
+import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Scanner;
-import java.awt.*;
-import javax.swing.*;
-import java.sql.*;
 
 
 
 
-public class Main extends JFrame{
+class Main extends JFrame{
 
-
-
-    static final String DB_URL = "jdbc:sqlite:coins.db";  //used for connecting to SQLite database
-    static String[] coin_type = {"LTC", "ETH", "XMR", "XVG", "XLM", "ZEC", "XRP", "REQ", "BCH", "LINK", "NXT", "BTC"};
-    static String[] json_parsed_array = new String[coin_type.length];
-    static boolean json_parsed_array_write = false;
-    static boolean updated_values = false;
-    static String display_string = "grabbing data";  //string used to display data in the GUI
+    private static final String DB_URL = "jdbc:sqlite:coins.db";  //used for connecting to SQLite database
+    private static final String[] coin_type = {"LTC", "ETH", "XMR", "XVG", "XLM", "ZEC", "XRP", "REQ", "BCH", "LINK", "NXT", "BTC"};
+    private static final String[] json_parsed_array = new String[coin_type.length];
+    private static boolean json_parsed_array_write = false;
+    private static boolean updated_values = false;
+    private static String display_string = "grabbing data";  //string used to display data in the GUI
 
 
 /*
@@ -26,7 +27,7 @@ public class Main extends JFrame{
  *  Currently, all displayed data is provided by a single string (display_string) which is bound to
  *  JLabel label1 on JPanel panel. An infinite loop is then used to continuously update the display.
  */
-    public Main() throws InterruptedException {
+private Main() throws InterruptedException {
         this.setSize(1300,30);
         Toolkit tk = Toolkit.getDefaultToolkit();
         Dimension dim = tk.getScreenSize();
@@ -38,7 +39,7 @@ public class Main extends JFrame{
 
         this.setVisible(true);
 
-        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         this.setTitle("Crypto Ticker");
 
         JPanel panel = new JPanel();
@@ -64,7 +65,7 @@ public class Main extends JFrame{
  *      3. Parsing through the json data as a string
  *      4. Adding the parsed json data to the database
  */
-    static void WriteToDB(String[] data) throws SQLException {
+    private static void WriteToDB(String[] data) throws SQLException {
         Statement stmt = null;
         Connection c = null;
 
@@ -86,9 +87,7 @@ public class Main extends JFrame{
             Class.forName("org.sqlite.JDBC");
             c = DriverManager.getConnection(DB_URL);
 
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (SQLException e) {
+        } catch (ClassNotFoundException | SQLException e) {
             e.printStackTrace();
         }
 
@@ -106,9 +105,7 @@ public class Main extends JFrame{
  */     for (int i = 0; i < coin_type.length; i++) {
             String delims = "[,]";
             String[] tokens = data[i].split(delims);
-            for (int j = 0; j < tokens.length; j++) {
-                coin_list[i][j] = tokens[j];
-            }
+            System.arraycopy(tokens, 0, coin_list[i], 0, tokens.length);
         }
 /*
  *  Parses out unnecessary characters such as " } $ and then and then parses out char : and everything before it
@@ -148,8 +145,8 @@ public class Main extends JFrame{
  *  Grabs all the json data from the API and returns it as a string
  *  Note: String 'cur' is the 3-4 letter abbreviation for a specific coin
  */
-    static String GetAPI(String cur) throws IOException {
-        String json_string = "";
+    private static String GetAPI(String cur) throws IOException {
+        StringBuilder json_string = new StringBuilder();
         URL url = new URL("https://min-api.cryptocompare.com/data/pricemultifull?fsyms=" + cur + "&tsyms=USD");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
@@ -160,11 +157,11 @@ public class Main extends JFrame{
         else {
             Scanner sc = new Scanner(url.openStream());
             while (sc.hasNext()) {
-                json_string += sc.nextLine();
+                json_string.append(sc.nextLine());
             }
             sc.close();
         }
-        return json_string;
+        return json_string.toString();
     }
 
 
@@ -175,90 +172,90 @@ public class Main extends JFrame{
  *      3. Adds all parsed data to a single string (display_string) to display in GUI
  *      4. Calls WriteToDB to write json data from API to SQLite database if elapsed time >= 90 seconds
  */
-    static Thread parse_and_loop = new Thread(){
-        public void run() {
-            long startTime = System.currentTimeMillis();
-            //System.out.println(startTime);
+    private static final Thread parse_and_loop = new Thread(() -> {
+        long startTime = System.currentTimeMillis();
+        //System.out.println(startTime);
 
-            while (true){
-                System.out.println("start loop!");
-                String[] json_array = new String[coin_type.length];
+        while (true){
+            System.out.println("start loop!");
+            String[] json_array = new String[coin_type.length];
 
 /*
- *  Grabs json data for each coin and places it into String[] json_array
- */                for (int i = 0; i < coin_type.length; i++) {
-                    try {
-                        json_array[i] = GetAPI(coin_type[i]);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-/*
- *  Parses out the numeric fiat value of each coin and places it in String[] json_parsed_array
- *  All data in the json_parsed_array is then added to String display_string
- */             json_parsed_array_write = true;
-                display_string = "";
-                for (int i = 0; i < coin_type.length; i++) {
-                    String delims = "[,]";
-                    String[] tokens = json_array[i].split(delims);
-                    String fiat_value = tokens[5].substring(tokens[5].lastIndexOf(":") + 1);
-                    if (fiat_value.contains("\"")) {
-                        fiat_value = fiat_value.replace("\"", "");
-                    }
-                    json_parsed_array[i] = fiat_value;
-                    display_string += (coin_type[i] + " : $" + fiat_value + "   ");
-                  //  System.out.println(coin_type[i] + " : " + fiat_value);
-                }
-/*
- *  Checks for elapsed time and calls WriteToDB for database write if elapsed time >= 90 seconds
- */             updated_values = true;
-                json_parsed_array_write = false;
+*  Grabs json data for each coin and places it into String[] json_array
+*/                for (int i = 0; i < coin_type.length; i++) {
                 try {
-                    long elapsedTime = System.currentTimeMillis() - startTime;
-                    if (elapsedTime >= 90000){
-                        startTime = System.currentTimeMillis();
-                        WriteToDB(json_array);
-                    }
-
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-/*
- *  Sleeps for 18 seconds before looping to conform with API request limits
- *  Note: a single loop appears to take ~20-30 seconds
- */             try {
-                    currentThread().sleep(18000);
-                } catch (InterruptedException e) {
+                    json_array[i] = GetAPI(coin_type[i]);
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
+/*
+*  Parses out the numeric fiat value of each coin and places it in String[] json_parsed_array
+*  All data in the json_parsed_array is then added to String display_string
+*/          json_parsed_array_write = true;
+            display_string = "";
+            StringBuilder display_string_build = new StringBuilder();
+            for (int i = 0; i < coin_type.length; i++) {
+                String delims = "[,]";
+                String[] tokens = json_array[i].split(delims);
+                String fiat_value = tokens[5].substring(tokens[5].lastIndexOf(":") + 1);
+                if (fiat_value.contains("\"")) {
+                    fiat_value = fiat_value.replace("\"", "");
+                }
+                json_parsed_array[i] = fiat_value;
+                display_string_build.append(coin_type[i]).append(" : $").append(fiat_value).append("   ");
+              //  System.out.println(coin_type[i] + " : " + fiat_value);
+            }
+
+            display_string = display_string_build.toString();
+
+/*
+*  Checks for elapsed time and calls WriteToDB for database write if elapsed time >= 90 seconds
+*/             updated_values = true;
+            json_parsed_array_write = false;
+            try {
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                if (elapsedTime >= 90000){
+                    startTime = System.currentTimeMillis();
+                    WriteToDB(json_array);
+                }
+
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+/*
+*  Sleeps for 18 seconds before looping to conform with API request limits
+*  Note: a single loop appears to take ~20-30 seconds
+*/             try {
+                Thread.currentThread().sleep(18000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
-    };
+    });
 
 /*
  *  Simple thread for printing coin fiat values whenever new json data has been obtained
  *  Not really necessary, might delete soon
- */   static Thread printing_thread = new Thread() {
-        public void run() {
+ */   private static final Thread printing_thread = new Thread(() -> {
 
-            while(true){
-                if (updated_values == true && json_parsed_array_write == false){
-                    for (int i = 0; i < coin_type.length; i++){
-                        System.out.println(coin_type[i] + " : $" + json_parsed_array[i]);
-                    }
+     while(true){
+         if (updated_values && !json_parsed_array_write){
+             for (int i = 0; i < coin_type.length; i++){
+                 System.out.println(coin_type[i] + " : $" + json_parsed_array[i]);
+             }
 
-                    updated_values = false;
-                }
+             updated_values = false;
+         }
 
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+         try {
+             Thread.sleep(100);
+         } catch (InterruptedException e) {
+             e.printStackTrace();
+         }
+     }
 
-        }
-    };
+ });
 
 /*
  *  Starts threads and calls constructor to make GUI
